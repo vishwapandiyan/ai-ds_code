@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/level_controller.dart';
+import '../../controllers/leaderboard_controller.dart';
 import '../../models/level.dart';
 
 import '../../widgets/custom_button.dart';
@@ -34,9 +35,12 @@ class _MCQTestScreenState extends State<MCQTestScreen> {
   }
 
   Future<void> _loadMCQs() async {
+    print('📚 Loading MCQs for level ${widget.level.id}');
     final levelController = context.read<LevelController>();
     await levelController.loadMCQsForLevel(widget.level.id);
+    print('📚 MCQs loaded: ${levelController.currentLevelMCQs.length}');
     _initializeAnswers();
+    setState(() {}); // Trigger rebuild to show MCQs
   }
 
   @override
@@ -55,11 +59,17 @@ class _MCQTestScreenState extends State<MCQTestScreen> {
 
   void _initializeAnswers() {
     final levelController = context.read<LevelController>();
+    print('📝 Initializing answers...');
+    print('📝 Current MCQs count: ${levelController.currentLevelMCQs.length}');
     if (levelController.currentLevelMCQs.isNotEmpty) {
       _answers = List.generate(
         levelController.currentLevelMCQs.length,
         (index) => {'question_index': index, 'selected_answer': -1},
       );
+      print('📝 Initialized answers for ${_answers.length} questions');
+      print('📝 Total MCQs in level: ${levelController.currentLevelMCQs.length}');
+    } else {
+      print('❌ No MCQs available for level');
     }
   }
 
@@ -120,6 +130,11 @@ class _MCQTestScreenState extends State<MCQTestScreen> {
     final authController = context.read<AuthController>();
     final user = authController.currentUser;
 
+    print('📝 Submitting test with ${_answers.length} answers');
+    print('📝 Time taken: $_timeElapsed seconds');
+    print('📝 Current MCQs count: ${levelController.currentLevelMCQs.length}');
+    print('📝 Answers structure: ${_answers.take(3).toList()}'); // Show first 3 answers
+
     if (user != null) {
       final success = await levelController.submitMCQTest(
         studentId: user.id,
@@ -130,11 +145,30 @@ class _MCQTestScreenState extends State<MCQTestScreen> {
 
       if (success && mounted) {
         _timer?.cancel();
+        
+        // Update leaderboard
+        try {
+          final leaderboardController = context.read<LeaderboardController>();
+          final performance = levelController.currentPerformance;
+          if (performance != null) {
+            await leaderboardController.updateLeaderboard(
+              studentId: user.id,
+              levelId: widget.level.id,
+              score: performance['score'] ?? 0,
+              timeTaken: performance['time_taken'] ?? _timeElapsed,
+            );
+          }
+        } catch (e) {
+          print('❌ Error updating leaderboard: $e');
+        }
+        
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => ResultScreen(
               performance: levelController.currentPerformance!,
+              mcqQuestions: levelController.currentLevelMCQs,
+              studentAnswers: _answers,
             ),
           ),
         );

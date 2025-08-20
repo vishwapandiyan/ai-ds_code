@@ -21,7 +21,9 @@ class Level {
       levelNumber: map['level_number'] ?? 0,
       title: map['title'] ?? '',
       description: map['description'] ?? '',
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: map['created_at'] != null 
+          ? DateTime.parse(map['created_at']) 
+          : DateTime.now(),
       mcqs: map['mcqs'] != null 
           ? List<MCQ>.from(map['mcqs'].map((x) => MCQ.fromMap(x)))
           : null,
@@ -88,7 +90,9 @@ class MCQ {
       options: List<String>.from(map['options'] ?? []),
       correctAnswer: map['correct_answer'] ?? 0,
       explanation: map['explanation'] ?? '',
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: map['created_at'] != null 
+          ? DateTime.parse(map['created_at']) 
+          : DateTime.now(),
     );
   }
 

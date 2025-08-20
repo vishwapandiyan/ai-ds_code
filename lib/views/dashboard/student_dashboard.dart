@@ -59,6 +59,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
                     ),
                   );
                   break;
+                case 'leaderboard':
+                  Navigator.pushNamed(context, '/leaderboard');
+                  break;
                 case 'logout':
                   context.read<AuthController>().logout();
                   break;
@@ -82,6 +85,16 @@ class _StudentDashboardState extends State<StudentDashboard> {
                     Icon(Icons.notifications, size: 20),
                     SizedBox(width: 8),
                     Text('Notifications'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'leaderboard',
+                child: Row(
+                  children: [
+                    Icon(Icons.emoji_events, size: 20),
+                    SizedBox(width: 8),
+                    Text('Leaderboard'),
                   ],
                 ),
               ),
@@ -387,7 +400,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ResultScreen(performance: performance.toMap()),
+                      builder: (context) => ResultScreen(
+                    performance: performance.toMap(),
+                    mcqQuestions: null, // Will be fetched from database
+                    studentAnswers: null, // Will use performance answers
+                  ),
                     ),
                   );
                 },

@@ -5,12 +5,14 @@ import 'services/supabase_service.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/level_controller.dart';
 import 'controllers/admin_controller.dart';
+import 'controllers/leaderboard_controller.dart';
 import 'views/auth/login_screen.dart';
 import 'views/auth/register_screen.dart';
 import 'views/dashboard/student_dashboard.dart';
 import 'views/dashboard/staff_dashboard.dart';
 import 'views/dashboard/admin_dashboard.dart';
 import 'views/profile/edit_profile_screen.dart';
+import 'views/leaderboard/leaderboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,9 +33,13 @@ class StudentsCodingPortal extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthController()),
         ChangeNotifierProvider(create: (_) => LevelController()),
         ChangeNotifierProvider(create: (_) => AdminController()),
+        ChangeNotifierProvider(create: (_) => LeaderboardController()),
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        showSemanticsDebugger: false,
         title: 'Students\' Coding Portal',
+
         theme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
@@ -50,6 +56,7 @@ class StudentsCodingPortal extends StatelessWidget {
           '/staff-dashboard': (context) => const StaffDashboard(),
           '/admin-dashboard': (context) => const AdminDashboard(),
           '/edit-profile': (context) => const EditProfileScreen(),
+          '/leaderboard': (context) => const LeaderboardScreen(),
         },
       ),
     );

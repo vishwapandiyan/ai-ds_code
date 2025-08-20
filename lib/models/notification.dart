@@ -25,7 +25,9 @@ class Notification {
       message: map['message'] ?? '',
       type: map['type'] ?? 'general',
       isRead: map['is_read'] ?? false,
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: map['created_at'] != null 
+          ? DateTime.parse(map['created_at']) 
+          : DateTime.now(),
     );
   }
 

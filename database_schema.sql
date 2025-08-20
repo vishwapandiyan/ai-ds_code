@@ -56,6 +56,27 @@ CREATE TABLE student_performance (
     UNIQUE(student_id, level_id)
 );
 
+-- Leaderboard Table
+CREATE TABLE leaderboard (
+    id SERIAL PRIMARY KEY,
+    student_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    level_id INTEGER NOT NULL REFERENCES levels(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL,
+    time_taken INTEGER NOT NULL, -- in seconds
+    rank_position INTEGER,
+    completed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(student_id, level_id)
+);
+
+-- Add explicit foreign key constraints with proper names
+ALTER TABLE leaderboard 
+ADD CONSTRAINT leaderboard_student_id_fkey 
+FOREIGN KEY (student_id) REFERENCES user_profiles(id) ON DELETE CASCADE;
+
+ALTER TABLE leaderboard 
+ADD CONSTRAINT leaderboard_level_id_fkey 
+FOREIGN KEY (level_id) REFERENCES levels(id) ON DELETE CASCADE;
+
 -- Notifications Table
 CREATE TABLE notifications (
     id SERIAL PRIMARY KEY,
@@ -74,6 +95,7 @@ ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE levels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mcqs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_performance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leaderboard ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- User Profiles Policies
@@ -148,6 +170,31 @@ CREATE POLICY "Admins can view all performance" ON student_performance
         EXISTS (
             SELECT 1 FROM user_profiles 
             WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Leaderboard Policies
+CREATE POLICY "Students can view their own leaderboard" ON leaderboard
+    FOR SELECT USING (auth.uid() = student_id);
+
+CREATE POLICY "Admins can view all leaderboard" ON leaderboard
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Staff can view leaderboard for assigned students" ON leaderboard
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles up
+            WHERE up.id = auth.uid() 
+            AND up.role = 'staff' 
+            AND up.id = (
+                SELECT assigned_staff_id FROM user_profiles 
+                WHERE id = leaderboard.student_id
+            )
         )
     );
 
@@ -258,4 +305,10 @@ CREATE INDEX idx_mcqs_level_id ON mcqs(level_id);
 CREATE INDEX idx_student_performance_student_id ON student_performance(student_id);
 CREATE INDEX idx_student_performance_level_id ON student_performance(level_id);
 CREATE INDEX idx_notifications_to_user_id ON notifications(to_user_id);
-CREATE INDEX idx_notifications_created_at ON notifications(created_at); 
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+
+-- Leaderboard indexes
+CREATE INDEX idx_leaderboard_level_id ON leaderboard(level_id);
+CREATE INDEX idx_leaderboard_score_time ON leaderboard(level_id, score DESC, time_taken ASC);
+CREATE INDEX idx_leaderboard_rank ON leaderboard(level_id, rank_position);
+CREATE INDEX idx_leaderboard_student_id ON leaderboard(student_id); 

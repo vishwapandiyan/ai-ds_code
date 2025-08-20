@@ -39,7 +39,9 @@ class User {
       assignedStaffId: map['assigned_staff_id'],
       username: map['username'],
       password: map['password'],
-      createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: map['created_at'] != null 
+          ? DateTime.parse(map['created_at']) 
+          : DateTime.now(),
       enrollmentNo: map['enrollment_no'],
       class_: map['class'],
       year: map['year'] != null ? int.tryParse(map['year'].toString()) : null,

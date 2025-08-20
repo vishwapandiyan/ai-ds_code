@@ -7,6 +7,7 @@ import '../models/user.dart';
 
 import '../models/performance.dart';
 import '../models/notification.dart' as app_notification;
+import '../models/leaderboard.dart';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://wajybcjclcrfxkcamxvi.supabase.co';
@@ -148,7 +149,9 @@ class SupabaseService {
           role: profileData['role'],
           status: profileData['status'],
           assignedStaffId: profileData['assigned_staff_id'],
-          createdAt: DateTime.parse(profileData['created_at'] ?? DateTime.now().toIso8601String()),
+          createdAt: profileData['created_at'] != null 
+            ? DateTime.parse(profileData['created_at']) 
+            : DateTime.now(),
           enrollmentNo: profileData['enrollment_no'],
           class_: profileData['class'],
           year: profileData['year'] != null ? int.tryParse(profileData['year'].toString()) : null,
@@ -188,7 +191,9 @@ class SupabaseService {
         role: data['role'],
         status: data['status'],
         assignedStaffId: data['assigned_staff_id'],
-        createdAt: DateTime.parse(data['created_at'] ?? DateTime.now().toIso8601String()),
+        createdAt: data['created_at'] != null 
+            ? DateTime.parse(data['created_at']) 
+            : DateTime.now(),
       )).toList();
     } catch (e) {
       print('❌ Error getting pending students: $e');
@@ -216,7 +221,9 @@ class SupabaseService {
         role: data['role'],
         status: data['status'],
         assignedStaffId: data['assigned_staff_id'],
-        createdAt: DateTime.parse(data['created_at'] ?? DateTime.now().toIso8601String()),
+        createdAt: data['created_at'] != null 
+            ? DateTime.parse(data['created_at']) 
+            : DateTime.now(),
       )).toList();
       
       print('📊 Found ${staffList.length} staff members');
@@ -447,7 +454,9 @@ class SupabaseService {
         role: data['role'],
         status: data['status'],
         assignedStaffId: data['assigned_staff_id'],
-        createdAt: DateTime.parse(data['created_at'] ?? DateTime.now().toIso8601String()),
+        createdAt: data['created_at'] != null 
+            ? DateTime.parse(data['created_at']) 
+            : DateTime.now(),
       )).toList();
     } catch (e) {
       print('❌ Error getting students by staff: $e');
@@ -474,7 +483,9 @@ class SupabaseService {
         role: data['role'],
         status: data['status'],
         assignedStaffId: data['assigned_staff_id'],
-        createdAt: DateTime.parse(data['created_at'] ?? DateTime.now().toIso8601String()),
+        createdAt: data['created_at'] != null 
+            ? DateTime.parse(data['created_at']) 
+            : DateTime.now(),
         enrollmentNo: data['enrollment_no'],
         class_: data['class'],
         year: data['year'] != null ? int.tryParse(data['year'].toString()) : null,
@@ -813,7 +824,9 @@ class SupabaseService {
         totalQuestions: data['total_questions'] ?? 0,
         timeTaken: data['time_taken'] ?? 0,
         answers: [],
-        completedAt: DateTime.parse(data['completed_at'] ?? DateTime.now().toIso8601String()),
+        completedAt: data['completed_at'] != null 
+            ? DateTime.parse(data['completed_at']) 
+            : DateTime.now(),
         level: data['levels'] ?? {},
       )).toList();
       
@@ -973,6 +986,340 @@ class SupabaseService {
       print('❌ Error marking notification as read: $e');
       // For demo purposes, just print the action
       print('✅ DEMO: Marked notification $notificationId as read');
+    }
+  }
+
+  // Leaderboard methods
+  static Future<void> updateLeaderboard({
+    required String studentId,
+    required int levelId,
+    required int score,
+    required int timeTaken,
+  }) async {
+    try {
+      print('🏆 Updating leaderboard for student: $studentId, level: $levelId');
+      print('🏆 Score: $score, Time: $timeTaken seconds');
+      
+      // Validate input data
+      if (score < 0 || score > 100) {
+        print('❌ Invalid score: $score (must be 0-100)');
+        return;
+      }
+      
+      if (timeTaken < 0) {
+        print('❌ Invalid time: $timeTaken seconds');
+        return;
+      }
+      
+      // First, check if entry exists
+      final existingEntry = await client
+          .from('leaderboard')
+          .select()
+          .eq('student_id', studentId)
+          .eq('level_id', levelId)
+          .maybeSingle();
+      
+      if (existingEntry != null) {
+        print('🏆 Existing entry found: Score ${existingEntry['score']}, Time ${existingEntry['time_taken']}');
+        // Update existing entry if score is better or time is faster
+        if (score > existingEntry['score'] || 
+            (score == existingEntry['score'] && timeTaken < existingEntry['time_taken'])) {
+          await client
+              .from('leaderboard')
+              .update({
+                'score': score,
+                'time_taken': timeTaken,
+                'completed_at': DateTime.now().toIso8601String(),
+              })
+              .eq('student_id', studentId)
+              .eq('level_id', levelId);
+          print('✅ Leaderboard entry updated');
+        } else {
+          print('🏆 Score not improved, keeping existing entry');
+        }
+      } else {
+        // Create new entry
+        await client.from('leaderboard').insert({
+          'student_id': studentId,
+          'level_id': levelId,
+          'score': score,
+          'time_taken': timeTaken,
+          'completed_at': DateTime.now().toIso8601String(),
+        });
+        print('✅ New leaderboard entry created');
+      }
+      
+      // Update rankings for this level
+      await _updateLevelRankings(levelId);
+      
+      print('🏆 Leaderboard update completed successfully');
+      
+    } catch (e) {
+      print('❌ Error updating leaderboard: $e');
+      print('❌ Stack trace: ${StackTrace.current}');
+      throw Exception('Failed to update leaderboard: $e');
+    }
+  }
+
+  static Future<void> _updateLevelRankings(int levelId) async {
+    try {
+      print('🔄 Updating rankings for level: $levelId');
+      
+      // Get all entries for this level, ordered by score (desc) and time (asc)
+      final entries = await client
+          .from('leaderboard')
+          .select()
+          .eq('level_id', levelId)
+          .order('score', ascending: false)
+          .order('time_taken', ascending: true);
+      
+      // Update rank positions
+      for (int i = 0; i < entries.length; i++) {
+        await client
+            .from('leaderboard')
+            .update({'rank_position': i + 1})
+            .eq('id', entries[i]['id']);
+      }
+      
+      print('✅ Rankings updated for level $levelId');
+    } catch (e) {
+      print('❌ Error updating rankings: $e');
+    }
+  }
+
+  static Future<List<LeaderboardEntry>> getLeaderboardForLevel(int levelId) async {
+    try {
+      print('🏆 Fetching leaderboard for level: $levelId');
+      
+      // First get the leaderboard entries
+      final leaderboardResponse = await client
+          .from('leaderboard')
+          .select('*')
+          .eq('level_id', levelId)
+          .order('rank_position', ascending: true)
+          .limit(50); // Top 50 students
+      
+      if (leaderboardResponse.isEmpty) {
+        print('🏆 No leaderboard entries found for level $levelId');
+        return [];
+      }
+      
+      // Get user profiles for the students
+      final studentIds = leaderboardResponse.map((e) => e['student_id']).toList();
+      final userProfilesResponse = await client
+          .from('user_profiles')
+          .select('id, email, username')
+          .inFilter('id', studentIds);
+      
+      // Get level information
+      final levelResponse = await client
+          .from('levels')
+          .select('id, title, level_number')
+          .eq('id', levelId)
+          .single();
+      
+      // Create a map for quick lookup
+      final userProfilesMap = Map.fromEntries(
+        userProfilesResponse.map((e) => MapEntry(e['id'], e))
+      );
+      
+      print('🏆 Found ${leaderboardResponse.length} leaderboard entries');
+      
+      return leaderboardResponse.map((data) => LeaderboardEntry(
+        id: data['id'],
+        studentId: data['student_id'],
+        levelId: data['level_id'],
+        score: data['score'] ?? 0,
+        timeTaken: data['time_taken'] ?? 0,
+        rankPosition: data['rank_position'],
+        completedAt: data['completed_at'] != null 
+            ? DateTime.parse(data['completed_at']) 
+            : DateTime.now(),
+        studentName: userProfilesMap[data['student_id']]?['username'],
+        studentEmail: userProfilesMap[data['student_id']]?['email'],
+        levelTitle: levelResponse['title'],
+        levelNumber: levelResponse['level_number'],
+      )).toList();
+    } catch (e) {
+      print('❌ Error fetching leaderboard: $e');
+      throw Exception('Failed to fetch leaderboard: $e');
+    }
+  }
+
+  static Future<List<LeaderboardEntry>> getGlobalLeaderboard() async {
+    try {
+      print('🏆 Fetching global leaderboard');
+      
+      // Get all leaderboard entries
+      final response = await client
+          .from('leaderboard')
+          .select('*')
+          .order('score', ascending: false)
+          .order('time_taken', ascending: true)
+          .limit(100); // Get more entries to filter in code
+      
+      if (response.isEmpty) {
+        print('🏆 No leaderboard entries found');
+        return [];
+      }
+      
+      // Get user profiles for all students
+      final studentIds = response.map((e) => e['student_id']).toSet().toList();
+      final userProfilesResponse = await client
+          .from('user_profiles')
+          .select('id, email, username')
+          .inFilter('id', studentIds);
+      
+      // Get all levels
+      final levelIds = response.map((e) => e['level_id']).toSet().toList();
+      final levelsResponse = await client
+          .from('levels')
+          .select('id, title, level_number')
+          .inFilter('id', levelIds);
+      
+      // Create maps for quick lookup
+      final userProfilesMap = Map.fromEntries(
+        userProfilesResponse.map((e) => MapEntry(e['id'], e))
+      );
+      final levelsMap = Map.fromEntries(
+        levelsResponse.map((e) => MapEntry(e['id'], e))
+      );
+      
+      print('🏆 Found ${response.length} leaderboard entries');
+      
+      // Filter to get only the best score per student
+      final Map<String, LeaderboardEntry> bestScores = {};
+      
+      for (final data in response) {
+        final studentId = data['student_id'];
+        final score = data['score'];
+        final timeTaken = data['time_taken'];
+        
+        if (!bestScores.containsKey(studentId) || 
+            score > bestScores[studentId]!.score ||
+            (score == bestScores[studentId]!.score && timeTaken < bestScores[studentId]!.timeTaken)) {
+          bestScores[studentId] = LeaderboardEntry(
+            id: data['id'],
+            studentId: data['student_id'],
+            levelId: data['level_id'],
+            score: data['score'] ?? 0,
+            timeTaken: data['time_taken'] ?? 0,
+            rankPosition: null, // Global ranking will be calculated in UI
+            completedAt: data['completed_at'] != null 
+                ? DateTime.parse(data['completed_at']) 
+                : DateTime.now(),
+            studentName: userProfilesMap[data['student_id']]?['username'],
+            studentEmail: userProfilesMap[data['student_id']]?['email'],
+            levelTitle: levelsMap[data['level_id']]?['title'],
+            levelNumber: levelsMap[data['level_id']]?['level_number'],
+          );
+        }
+      }
+      
+      // Convert to list and sort by score and time
+      final sortedEntries = bestScores.values.toList()
+        ..sort((a, b) {
+          if (a.score != b.score) {
+            return b.score.compareTo(a.score); // Higher score first
+          }
+          return a.timeTaken.compareTo(b.timeTaken); // Lower time first
+        });
+      
+      // Limit to top 50
+      final finalEntries = sortedEntries.take(50).toList();
+      
+      print('🏆 Processed ${finalEntries.length} unique student entries');
+      return finalEntries;
+    } catch (e) {
+      print('❌ Error fetching global leaderboard: $e');
+      throw Exception('Failed to fetch global leaderboard: $e');
+    }
+  }
+
+  // Debug method to check leaderboard state
+  static Future<void> debugLeaderboard() async {
+    try {
+      print('🔍 Debugging leaderboard state...');
+      
+      // Check total entries
+      final leaderboardEntries = await client
+          .from('leaderboard')
+          .select('*');
+      
+      print('📊 Total leaderboard entries: ${leaderboardEntries.length}');
+      
+      if (leaderboardEntries.isNotEmpty) {
+        // Show sample entries
+        final sampleEntries = leaderboardEntries.take(5).toList();
+        
+        print('📋 Sample entries:');
+        for (final entry in sampleEntries) {
+          print('   Student: ${entry['student_id']}, Level: ${entry['level_id']}, Score: ${entry['score']}, Time: ${entry['time_taken']}');
+        }
+      }
+      
+      // Check user_profiles table
+      final users = await client
+          .from('user_profiles')
+          .select('*');
+      print('👥 Total users: ${users.length}');
+      
+      // Check levels table
+      final levels = await client
+          .from('levels')
+          .select('*');
+      print('📚 Total levels: ${levels.length}');
+      
+    } catch (e) {
+      print('❌ Error debugging leaderboard: $e');
+    }
+  }
+
+  static Future<List<LeaderboardEntry>> getStudentLeaderboard(String studentId) async {
+    try {
+      print('🏆 Fetching leaderboard for student: $studentId');
+      
+      final response = await client
+          .from('leaderboard')
+          .select('*')
+          .eq('student_id', studentId)
+          .order('level_id', ascending: true);
+      
+      if (response.isEmpty) {
+        print('🏆 No leaderboard entries found for student');
+        return [];
+      }
+      
+      // Get level information
+      final levelIds = response.map((e) => e['level_id']).toSet().toList();
+      final levelsResponse = await client
+          .from('levels')
+          .select('id, title, level_number')
+          .inFilter('id', levelIds);
+      
+      // Create a map for quick lookup
+      final levelsMap = Map.fromEntries(
+        levelsResponse.map((e) => MapEntry(e['id'], e))
+      );
+      
+      print('🏆 Found ${response.length} entries for student');
+      
+      return response.map((data) => LeaderboardEntry(
+        id: data['id'],
+        studentId: data['student_id'],
+        levelId: data['level_id'],
+        score: data['score'] ?? 0,
+        timeTaken: data['time_taken'] ?? 0,
+        rankPosition: data['rank_position'],
+        completedAt: data['completed_at'] != null 
+            ? DateTime.parse(data['completed_at']) 
+            : DateTime.now(),
+        levelTitle: levelsMap[data['level_id']]?['title'],
+        levelNumber: levelsMap[data['level_id']]?['level_number'],
+      )).toList();
+    } catch (e) {
+      print('❌ Error fetching student leaderboard: $e');
+      throw Exception('Failed to fetch student leaderboard: $e');
     }
   }
 }

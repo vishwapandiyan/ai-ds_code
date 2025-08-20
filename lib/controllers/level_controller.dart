@@ -98,7 +98,8 @@ class LevelController extends ChangeNotifier {
         },
       );
       
-      _currentPerformance = mockPerformance.toMap();
+      // Don't overwrite _currentPerformance with mock data
+      // _currentPerformance = mockPerformance.toMap();
       return [mockPerformance];
     } catch (e) {
       _error = e.toString();
@@ -124,7 +125,19 @@ class LevelController extends ChangeNotifier {
       
       // Calculate performance
       final correctAnswers = answers.where((answer) => answer['selected_answer'] == 1).length;
-      final score = (correctAnswers / answers.length) * 100;
+      final totalQuestions = _currentLevelMCQs.length; // Use actual total questions from level
+      final score = (correctAnswers / totalQuestions) * 100;
+      
+      print('📊 Performance calculation:');
+      print('   _currentLevelMCQs length: ${_currentLevelMCQs.length}');
+      print('   Total questions in level: $totalQuestions');
+      print('   Answers submitted: ${answers.length}');
+      print('   Correct answers: $correctAnswers');
+      print('   Score: ${score.toInt()}%');
+      
+      if (_currentLevelMCQs.isEmpty) {
+        print('❌ WARNING: _currentLevelMCQs is empty! This will cause issues.');
+      }
       
       // Get level information
       final levelData = await SupabaseService.getLevelById(levelId.toString());
@@ -134,7 +147,7 @@ class LevelController extends ChangeNotifier {
         studentId: studentId,
         levelId: levelId,
         score: score.toInt(),
-        totalQuestions: answers.length,
+        totalQuestions: totalQuestions, // Use actual total questions
         correctAnswers: correctAnswers,
         timeTaken: timeTaken,
         answers: answers,
@@ -143,6 +156,17 @@ class LevelController extends ChangeNotifier {
       );
       
       _currentPerformance = performance.toMap();
+      
+      print('📊 Final performance data stored:');
+      print('   _currentPerformance: $_currentPerformance');
+      if (_currentPerformance != null) {
+        print('   Score: ${_currentPerformance!['score']}');
+        print('   Total questions: ${_currentPerformance!['total_questions']}');
+        print('   Correct answers: ${_currentPerformance!['correct_answers']}');
+        print('   Time taken: ${_currentPerformance!['time_taken']}');
+      } else {
+        print('   ❌ _currentPerformance is null!');
+      }
       
       return true;
     } catch (e) {

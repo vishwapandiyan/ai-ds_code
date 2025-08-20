@@ -33,7 +33,9 @@ class Performance {
       correctAnswers: map['correct_answers'] ?? 0,
       timeTaken: map['time_taken'] ?? 0,
       answers: List<Map<String, dynamic>>.from(map['answers'] ?? []),
-      completedAt: DateTime.parse(map['completed_at'] ?? DateTime.now().toIso8601String()),
+      completedAt: map['completed_at'] != null 
+          ? DateTime.parse(map['completed_at']) 
+          : DateTime.now(),
       level: map['levels'] != null ? Map<String, dynamic>.from(map['levels']) : null,
     );
   }
